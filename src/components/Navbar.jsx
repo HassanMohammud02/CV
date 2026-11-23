@@ -1,175 +1,232 @@
-import React, { useState } from 'react';
-import {
-  Briefcase,
-  Command,
-  Menu,
-  Moon,
-  Search,
-  ShieldCheck,
-  Sun,
-  UserCheck,
-  X,
-} from 'lucide-react';
-import executiveSeal from '../assets/executive-seal.svg';
+import React, { useState, useEffect } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 
-const NAV_ITEMS = [
-  { id: 'home', label: 'Home' },
-  { id: 'recruiter', label: 'Recruiter View' },
-  { id: 'about', label: 'About' },
-  { id: 'resume', label: 'Resume / CV' },
-  { id: 'projects', label: 'Case Studies' },
-  { id: 'skills', label: 'Skills' },
-  { id: 'blog', label: 'Insights' },
-  { id: 'analytics', label: 'Analytics' },
-  { id: 'contact', label: 'Contact' },
+const NAV_LINKS = [
+  { id: 'home', label: 'HOME', href: '/#home' },
+  { id: 'about', label: 'ABOUT', href: '/#about' },
+  { id: 'work', label: 'WORK', href: '/#work' },
+  { id: 'skills', label: 'SKILLS', href: '/#skills' },
+  { id: 'education', label: 'EDUCATION', href: '/#education' },
+  { id: 'insights', label: 'INSIGHTS', href: '/#insights' },
+  { id: 'contact', label: 'CONTACT', href: '/#contact' },
 ];
 
-export default function Navbar({
-  activePage,
-  onNavigate,
-  darkMode,
-  onToggleDarkMode,
-  onOpenCommandPalette,
-}) {
-  const [mobileOpen, setMobileOpen] = useState(false);
+function readProfileNameFromStorage() {
+  try {
+    const candidateKeys = [
+      'portfolioData',
+      'portfolio_data',
+      'cmsData',
+      'cms_data',
+      'portfolio_profile',
+      'profile',
+    ];
+    for (const key of candidateKeys) {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      if (parsed?.profile?.name) return parsed.profile.name;
+      if (parsed?.profile?.full_name) return parsed.profile.full_name;
+      if (parsed?.name) return parsed.name;
+      if (parsed?.full_name) return parsed.full_name;
+    }
+  } catch {
+    // Preserve silent fallback if localStorage is unavailable
+  }
+  return '';
+}
 
-  const handleNav = (id) => {
-    onNavigate(id);
-    setMobileOpen(false);
+export default function Navbar({ brandName, adminRoute = '/admin' }) {
+  const [scrolled, setScrolled] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState('home');
+  const [storedName, setStoredName] = useState(() => readProfileNameFromStorage());
+  const location = useLocation();
+
+  const isHomePage = location.pathname === '/' || location.pathname === '';
+
+  useEffect(() => {
+    const onScroll = () => {
+      setScrolled(window.scrollY > 14);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // Sync brand initials if CMS localStorage updates
+  useEffect(() => {
+    const syncStorage = () => setStoredName(readProfileNameFromStorage());
+    window.addEventListener('storage', syncStorage);
+    window.addEventListener('cmsUpdated', syncStorage);
+    window.addEventListener('portfolioUpdated', syncStorage);
+    return () => {
+      window.removeEventListener('storage', syncStorage);
+      window.removeEventListener('cmsUpdated', syncStorage);
+      window.removeEventListener('portfolioUpdated', syncStorage);
+    };
+  }, []);
+
+  // Scroll-spy for active bottom-bar indicator on HomePage
+  useEffect(() => {
+    if (!isHomePage) return;
+
+    const sectionIds = NAV_LINKS.map((item) => item.id);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setActiveSection(entry.target.id);
+          }
+        });
+      },
+      { rootMargin: '-32% 0px -56% 0px' }
+    );
+
+    sectionIds.forEach((id) => {
+      const element = document.getElementById(id);
+      if (element) observer.observe(element);
+    });
+
+    return () => observer.disconnect();
+  }, [isHomePage]);
+
+  const effectiveName = brandName || storedName || 'P F';
+  const monogram = effectiveName
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0].toUpperCase())
+    .join('.');
+
+  const handleSectionClick = (e, id) => {
+    setMobileMenuOpen(false);
+    setActiveSection(id);
+
+    if (isHomePage) {
+      const target = document.getElementById(id);
+      if (target) {
+        e.preventDefault();
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        window.history.replaceState(null, '', `#${id}`);
+      }
+    }
   };
 
   return (
-    <header className="no-print sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 backdrop-blur-md transition-colors dark:border-slate-800/80 dark:bg-navy-950/90">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3.5 sm:px-6 lg:px-8">
-        {/* Brand Identity */}
-        <button
-          type="button"
-          onClick={() => handleNav('home')}
-          className="group flex items-center gap-3 text-left focus:outline-none"
-        >
-          <img
-            src={executiveSeal}
-            alt="Hassan Abdirahman Mohammud Monogram"
-            className="h-9 w-9 rounded-lg shadow-sm transition-transform group-hover:scale-105"
-          />
-          <div>
-            <div className="text-sm font-bold tracking-tight text-navy-900 dark:text-white sm:text-base">
-              Hassan A. Mohammud
-            </div>
-            <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
-              Economics &amp; Business Analytics • OsloMet
-            </div>
+    <header
+      className={`sticky top-0 z-40 w-full transition-all duration-500 ${
+        scrolled
+          ? 'bg-white/95 backdrop-blur-md shadow-[0_4px_24px_-12px_rgba(10,25,47,0.12)]'
+          : 'bg-white border-b border-slate-200'
+      }`}
+    >
+      {/* Bloomberg-Inspired Top Financial Status Strip */}
+      <div className="bg-[#0A192F] text-white border-b border-[#1D3557]">
+        <div className="max-w-7xl mx-auto px-6 lg:px-12 h-7 flex items-center justify-between text-[10px] sm:text-[11px] font-mono-tabular tracking-[0.14em]">
+          <div className="flex items-center gap-5 overflow-x-auto no-scrollbar">
+            <span className="inline-flex items-center gap-2 text-slate-200 shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#C59B27] live-terminal-dot" />
+              <span>EXECUTIVE DOSSIER</span>
+            </span>
+            <span className="hidden sm:inline text-slate-400 shrink-0">
+              SECTOR <span className="text-[#EAB308] ml-1">ECONOMICS · FINANCE · STRATEGY</span>
+            </span>
           </div>
-        </button>
 
-        {/* Desktop Links */}
-        <nav aria-label="Primary Navigation" className="hidden items-center gap-1 xl:flex">
-          {NAV_ITEMS.map((item) => {
-            const isActive = activePage === item.id;
+          <div className="flex items-center gap-4 shrink-0">
+            <Link
+              to={adminRoute}
+              className="text-slate-300 hover:text-[#EAB308] transition-colors uppercase"
+              title="Open Portfolio CMS"
+            >
+              CMS
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Minimalist Navigation Bar */}
+      <div className="max-w-7xl mx-auto px-6 lg:px-12 h-[74px] flex items-center justify-between">
+        {/* Left: Gold-Bordered Monogram Box + Dark Navy Wordmark */}
+        <Link
+          to="/"
+          onClick={(e) => handleSectionClick(e, 'home')}
+          className="inline-flex items-center gap-3.5 group focus:outline-none"
+        >
+          <span className="inline-flex items-center justify-center px-2.5 py-1 border-[1.5px] border-[#B45309] text-[#B45309] font-mono-tabular text-xs font-semibold tracking-[0.18em] group-hover:bg-[#0A192F] group-hover:border-[#0A192F] group-hover:text-white transition-colors duration-300">
+            {monogram || 'P.F'}.
+          </span>
+          <span className="font-display text-sm font-extrabold tracking-[0.24em] text-[#0A192F] uppercase">
+            PROFILE
+          </span>
+        </Link>
+
+        {/* Right: Tracked Uppercase Links with Flush Bottom Underline Indicator */}
+        <nav aria-label="Primary Navigation" className="hidden md:flex items-center h-full gap-7 lg:gap-9">
+          {NAV_LINKS.map((item) => {
+            const isActive = isHomePage && activeSection === item.id;
             return (
-              <button
+              <a
                 key={item.id}
-                type="button"
-                onClick={() => handleNav(item.id)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+                href={item.href}
+                onClick={(e) => handleSectionClick(e, item.id)}
+                className={`relative h-full inline-flex items-center text-[11px] font-semibold tracking-[0.16em] uppercase transition-colors duration-300 ${
                   isActive
-                    ? 'bg-navy-900 text-white shadow-sm dark:bg-emerald-700 dark:text-white'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-navy-900 dark:text-slate-300 dark:hover:bg-navy-850 dark:hover:text-white'
+                    ? 'text-[#B45309]'
+                    : 'text-slate-500 hover:text-[#0A192F]'
                 }`}
               >
                 {item.label}
-              </button>
+                <span
+                  className={`absolute bottom-0 left-0 right-0 h-[3px] bg-[#B45309] transition-transform duration-300 origin-left ${
+                    isActive ? 'scale-x-100' : 'scale-x-0'
+                  }`}
+                />
+              </a>
             );
           })}
         </nav>
 
-        {/* Right Controls */}
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onOpenCommandPalette}
-            title="Quick Search & Navigation (Ctrl+K)"
-            className="hidden items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-600 transition hover:border-slate-300 hover:bg-white dark:border-slate-700 dark:bg-navy-900 dark:text-slate-300 dark:hover:border-slate-600 sm:flex"
-          >
-            <Search className="h-3.5 w-3.5 text-slate-400" />
-            <span>Search</span>
-            <kbd className="inline-flex items-center gap-0.5 rounded bg-slate-200/80 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-              <Command className="h-2.5 w-2.5" />K
-            </kbd>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleNav('admin')}
-            className={`hidden items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition sm:inline-flex ${
-              activePage === 'admin'
-                ? 'border-amber-600 bg-amber-600 text-white'
-                : 'border-slate-200 bg-white text-slate-700 hover:border-emerald-600 hover:text-emerald-700 dark:border-slate-700 dark:bg-navy-900 dark:text-slate-200 dark:hover:border-emerald-500'
-            }`}
-          >
-            <ShieldCheck className="h-3.5 w-3.5" />
-            <span>CMS</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={onToggleDarkMode}
-            aria-label="Toggle Dark Mode"
-            className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 transition hover:bg-slate-100 hover:text-navy-900 dark:border-slate-700 dark:bg-navy-900 dark:text-slate-300 dark:hover:bg-navy-850 dark:hover:text-white"
-          >
-            {darkMode ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4" />}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setMobileOpen((v) => !v)}
-            aria-label="Toggle Menu"
-            className="rounded-lg border border-slate-200 bg-white p-2 text-slate-700 xl:hidden dark:border-slate-700 dark:bg-navy-900 dark:text-slate-200"
-          >
-            {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </button>
-        </div>
+        {/* Mobile Menu Trigger */}
+        <button
+          type="button"
+          onClick={() => setMobileMenuOpen((prev) => !prev)}
+          className="md:hidden p-2 text-[#0A192F] hover:text-[#B45309] transition-colors"
+          aria-label="Toggle navigation menu"
+          aria-expanded={mobileMenuOpen}
+        >
+          {mobileMenuOpen ? (
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+              <path strokeLinecap="square" strokeLinejoin="miter" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          ) : (
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+              <path strokeLinecap="square" strokeLinejoin="miter" d="M4 7h16M4 12h16M4 17h16" />
+            </svg>
+          )}
+        </button>
       </div>
 
-      {/* Mobile & Tablet Navigation Drawer */}
-      {mobileOpen && (
-        <div className="border-t border-slate-200 bg-white px-4 py-4 xl:hidden dark:border-slate-800 dark:bg-navy-950">
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {NAV_ITEMS.map((item) => {
-              const isActive = activePage === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => handleNav(item.id)}
-                  className={`flex items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold transition ${
-                    isActive
-                      ? 'bg-navy-900 text-white dark:bg-emerald-700'
-                      : 'bg-slate-50 text-slate-700 hover:bg-slate-100 dark:bg-navy-900 dark:text-slate-200'
-                  }`}
-                >
-                  {item.id === 'recruiter' ? (
-                    <UserCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                  ) : (
-                    <Briefcase className="h-3.5 w-3.5 opacity-60" />
-                  )}
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
-            <button
-              type="button"
-              onClick={() => handleNav('admin')}
-              className={`flex items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold transition ${
-                activePage === 'admin'
-                  ? 'bg-amber-600 text-white'
-                  : 'bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300'
-              }`}
-            >
-              <ShieldCheck className="h-3.5 w-3.5" />
-              <span>Admin CMS</span>
-            </button>
-          </div>
+      {/* Mobile Dropdown Drawer */}
+      {mobileMenuOpen && (
+        <div className="md:hidden bg-white border-b border-slate-200 px-6 py-4 space-y-1">
+          {NAV_LINKS.map((item) => {
+            const isActive = isHomePage && activeSection === item.id;
+            return (
+              <a
+                key={item.id}
+                href={item.href}
+                onClick={(e) => handleSectionClick(e, item.id)}
+                className={`block py-2.5 text-xs font-semibold tracking-[0.18em] uppercase transition-colors ${
+                  isActive
+                    ? 'text-[#B45309] border-l-2 border-[#B45309] pl-3'
+                    : 'text-slate-600 hover:text-[#0A192F] pl-3'
+                }`}
+              >
+                {item.label}
+              </a>
+            );
+          })}
         </div>
       )}
     </header>
